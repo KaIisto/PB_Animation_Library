@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props"
+          Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{76D8525D-4A48-4B4B-A6D3-AF1249C507A1}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>PB_AnimationLibrary</RootNamespace>
+    <AssemblyName>PBAnimationLibrary</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <PhantomBrigadeManagedPath Condition=" '$(PhantomBrigadeManagedPath)' == '' and '$(PHANTOM_BRIGADE_MANAGED_PATH)' != '' ">$(PHANTOM_BRIGADE_MANAGED_PATH)</PhantomBrigadeManagedPath>
+    <PhantomBrigadeManagedPath Condition=" '$(PhantomBrigadeManagedPath)' == '' ">..\..\..\..\..\..\SteamLibrary\steamapps\common\Phantom Brigade\PhantomBrigade_Data\Managed</PhantomBrigadeManagedPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>$(PhantomBrigadeManagedPath)\0Harmony.dll</HintPath>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(PhantomBrigadeManagedPath)\Assembly-CSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="Entitas">
+      <HintPath>$(PhantomBrigadeManagedPath)\Entitas.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="UnityEngine">
+      <HintPath>$(PhantomBrigadeManagedPath)\UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(PhantomBrigadeManagedPath)\UnityEngine.CoreModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.AnimationModule">
+      <HintPath>$(PhantomBrigadeManagedPath)\UnityEngine.AnimationModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.AssetBundleModule">
+      <HintPath>$(PhantomBrigadeManagedPath)\UnityEngine.AssetBundleModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(PhantomBrigadeManagedPath)\UnityEngine.IMGUIModule.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="AnimationLibraryInstaller.cs" />
+    <Compile Include="AnimationLibraryLog.cs" />
+    <Compile Include="ModLinkCustom.cs" />
+    <Compile Include="AnimationClipValidationCatalog.cs" />
+    <Compile Include="AnimationClipValidationRuntime.cs" />
+    <Compile Include="PlanningPreviewRendererRefresh.cs" />
+    <Compile Include="PoseAuthoringBoneSet.cs" />
+    <Compile Include="PoseLabWorkspaceWindow.cs" />
+    <Compile Include="PoseOverrideRuntime.cs" />
+    <Compile Include="PoseCounterpartResolver.cs" />
+    <Compile Include="PoseBranchMirror.cs" />
+    <Compile Include="PoseSnapshot.cs" />
+    <Compile Include="PoseSourceRuntime.cs" />
+    <Compile Include="PoseSymmetry.cs" />
+    <Compile Include="RigPathUtility.cs" />
+    <Compile Include="PoseSequence.cs" />
+    <Compile Include="PoseSequenceTrackScope.cs" />
+    <Compile Include="PoseSequenceBakeExchangeFormat.cs" />
+    <Compile Include="PoseSequenceBakeExchangeExporter.cs" />
+    <Compile Include="PoseSequenceBakeJsonWriter.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="VanillaPoseClipCatalog.cs" />
+    <Compile Include="VisibleMechRigResolver.cs" />
+    <Compile Include="WeaponFollowRuntime.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

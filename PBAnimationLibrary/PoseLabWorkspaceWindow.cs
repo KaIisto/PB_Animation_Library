@@ -164,6 +164,14 @@ namespace PB_AnimationLibrary
         private const float PelvisHeightMinOffset = -5f;
         private const float PelvisHeightMaxOffset = 5f;
 
+        private const float ArmInwardOffsetMax = 0.65f;
+        private const float ArmVerticalOffsetMax = 0.70f;
+        private const float ArmDepthOffsetMax = 0.90f;
+
+        private const float ThighInwardOffsetMax = 0.25f;
+        private const float ThighVerticalOffsetMax = 0.50f;
+        private const float ThighDepthOffsetMax = 0.50f;
+
         private Rect sourceWindowRect =
             new Rect(
                 20f,
@@ -2143,6 +2151,14 @@ namespace PB_AnimationLibrary
                 DrawPelvisHeightEditor(
                     node);
             }
+            else if (IsArmPositionNode(
+                         node.Name) ||
+                     IsThighPositionNode(
+                         node.Name))
+            {
+                DrawRootPositionEditor(
+                    node);
+            }
 
             PoseNodeSnapshot counterpart;
             bool hasCounterpart =
@@ -2169,7 +2185,7 @@ namespace PB_AnimationLibrary
                 GUILayout.Label(
                     "Mirror plane: joint_root local X = 0");
                 GUILayout.Label(
-                    "Selected-node rotation mirror is not a full branch pose mirror.");
+                    "Selected-node delta mirror includes supported position edits and rotation.");
 
                 symmetricEdit =
                     GUILayout.Toggle(
@@ -2271,6 +2287,251 @@ namespace PB_AnimationLibrary
             }
         }
 
+        private void DrawRootPositionEditor(
+            PoseNodeSnapshot node)
+        {
+            Vector3 currentPosition =
+                node.LocalPosition;
+
+            PoseOverrideRuntime.TryGetPosition(
+                actor,
+                node.Path,
+                out currentPosition);
+
+            Vector3 currentOffset =
+                currentPosition -
+                node.LocalPosition;
+
+            Vector3 minimumOffset;
+            Vector3 maximumOffset;
+            string label;
+
+            if (!TryGetRootPositionRange(
+                    node.Name,
+                    out minimumOffset,
+                    out maximumOffset,
+                    out label))
+            {
+                return;
+            }
+
+            GUILayout.Space(6f);
+            GUILayout.Label(
+                label + " — Source Pose offset");
+
+            float requestedX =
+                DrawPositionOffsetSlider(
+                    "X",
+                    currentOffset.x,
+                    minimumOffset.x,
+                    maximumOffset.x);
+
+            float requestedY =
+                DrawPositionOffsetSlider(
+                    "Y",
+                    currentOffset.y,
+                    minimumOffset.y,
+                    maximumOffset.y);
+
+            float requestedZ =
+                DrawPositionOffsetSlider(
+                    "Z",
+                    currentOffset.z,
+                    minimumOffset.z,
+                    maximumOffset.z);
+
+            GUILayout.Label(
+                "Offset range | X "
+                + FormatSignedRange(
+                    minimumOffset.x,
+                    maximumOffset.x)
+                + " | Y "
+                + FormatSignedRange(
+                    minimumOffset.y,
+                    maximumOffset.y)
+                + " | Z "
+                + FormatSignedRange(
+                    minimumOffset.z,
+                    maximumOffset.z));
+
+            if (Mathf.Approximately(
+                    requestedX,
+                    currentOffset.x) &&
+                Mathf.Approximately(
+                    requestedY,
+                    currentOffset.y) &&
+                Mathf.Approximately(
+                    requestedZ,
+                    currentOffset.z))
+            {
+                return;
+            }
+
+            Vector3 requestedPosition =
+                node.LocalPosition +
+                new Vector3(
+                    requestedX,
+                    requestedY,
+                    requestedZ);
+
+            PoseOverrideRuntime.SetPosition(
+                actor,
+                node.Path,
+                node.LocalPosition,
+                requestedPosition);
+
+            PoseNodeSnapshot counterpart;
+            if (symmetricEdit &&
+                PoseCounterpartResolver.TryResolve(
+                    sourcePose,
+                    node.Path,
+                    out counterpart) &&
+                authoringBones.CanEdit(
+                    counterpart.Path,
+                    showFingerJoints))
+            {
+                MirrorSelectedEdit(
+                    node,
+                    counterpart,
+                    false);
+            }
+        }
+
+        private static bool IsArmPositionNode(
+            string nodeName)
+        {
+            return string.Equals(
+                       nodeName,
+                       "joint_left_arm_xyz",
+                       StringComparison.Ordinal) ||
+                   string.Equals(
+                       nodeName,
+                       "joint_right_arm_xyz",
+                       StringComparison.Ordinal);
+        }
+
+        private static bool IsThighPositionNode(
+            string nodeName)
+        {
+            return string.Equals(
+                       nodeName,
+                       "joint_left_thigh_xyz",
+                       StringComparison.Ordinal) ||
+                   string.Equals(
+                       nodeName,
+                       "joint_right_thigh_xyz",
+                       StringComparison.Ordinal);
+        }
+
+        private static bool TryGetRootPositionRange(
+            string nodeName,
+            out Vector3 minimumOffset,
+            out Vector3 maximumOffset,
+            out string label)
+        {
+            minimumOffset = Vector3.zero;
+            maximumOffset = Vector3.zero;
+            label = string.Empty;
+
+            bool isLeft =
+                !string.IsNullOrEmpty(nodeName) &&
+                nodeName.IndexOf(
+                    "joint_left_",
+                    StringComparison.Ordinal) == 0;
+
+            bool isRight =
+                !string.IsNullOrEmpty(nodeName) &&
+                nodeName.IndexOf(
+                    "joint_right_",
+                    StringComparison.Ordinal) == 0;
+
+            if (IsArmPositionNode(
+                    nodeName))
+            {
+                label = "Arm Root Position";
+
+                minimumOffset =
+                    new Vector3(
+                        isRight
+                            ? -ArmInwardOffsetMax
+                            : 0f,
+                        -ArmVerticalOffsetMax,
+                        -ArmDepthOffsetMax);
+
+                maximumOffset =
+                    new Vector3(
+                        isLeft
+                            ? ArmInwardOffsetMax
+                            : 0f,
+                        ArmVerticalOffsetMax,
+                        ArmDepthOffsetMax);
+
+                return isLeft ||
+                       isRight;
+            }
+
+            if (IsThighPositionNode(
+                    nodeName))
+            {
+                label = "Thigh Root Position";
+
+                minimumOffset =
+                    new Vector3(
+                        isRight
+                            ? -ThighInwardOffsetMax
+                            : 0f,
+                        -ThighVerticalOffsetMax,
+                        -ThighDepthOffsetMax);
+
+                maximumOffset =
+                    new Vector3(
+                        isLeft
+                            ? ThighInwardOffsetMax
+                            : 0f,
+                        ThighVerticalOffsetMax,
+                        ThighDepthOffsetMax);
+
+                return isLeft ||
+                       isRight;
+            }
+
+            return false;
+        }
+
+        private static float DrawPositionOffsetSlider(
+            string axis,
+            float value,
+            float minimum,
+            float maximum)
+        {
+            GUILayout.BeginHorizontal();
+
+            GUILayout.Label(
+                axis
+                + " "
+                + value.ToString("F3"),
+                GUILayout.Width(90f));
+
+            float requested =
+                GUILayout.HorizontalSlider(
+                    value,
+                    minimum,
+                    maximum);
+
+            GUILayout.EndHorizontal();
+
+            return requested;
+        }
+
+        private static string FormatSignedRange(
+            float minimum,
+            float maximum)
+        {
+            return minimum.ToString("+0.00;-0.00;0.00")
+                   + " .. "
+                   + maximum.ToString("+0.00;-0.00;0.00");
+        }
+
         private void DrawPelvisHeightEditor(
             PoseNodeSnapshot node)
         {
@@ -2360,6 +2621,38 @@ namespace PB_AnimationLibrary
                 return;
             }
 
+            bool positionApplied = false;
+            float sourcePositionDelta = 0f;
+            float targetPositionDelta = 0f;
+
+            Vector3 sourcePositionOverride;
+            if (PoseOverrideRuntime.TryGetPosition(
+                    actor,
+                    sourceNode.Path,
+                    out sourcePositionOverride))
+            {
+                if (!PoseSymmetry.MirrorPositionEdit(
+                        actor,
+                        sourcePose,
+                        sourceNode,
+                        targetNode,
+                        out sourcePositionDelta,
+                        out targetPositionDelta))
+                {
+                    if (logResult)
+                    {
+                        AnimationLibraryLog.Warn(
+                            "PoseLab position mirror failed"
+                            + " | source=" + sourceNode.Path
+                            + " | target=" + targetNode.Path);
+                    }
+
+                    return;
+                }
+
+                positionApplied = true;
+            }
+
             if (!logResult)
                 return;
 
@@ -2369,7 +2662,12 @@ namespace PB_AnimationLibrary
                 + "|target=" + targetNode.Path
                 + "|plane=joint_root_local_x"
                 + "|sourceDeltaDeg=" + sourceDeltaDegrees.ToString("F3")
-                + "|targetDeltaDeg=" + targetDeltaDegrees.ToString("F3"));
+                + "|targetDeltaDeg=" + targetDeltaDegrees.ToString("F3")
+                + "|positionApplied=" + positionApplied
+                + "|sourcePositionDelta="
+                + sourcePositionDelta.ToString("F4")
+                + "|targetPositionDelta="
+                + targetPositionDelta.ToString("F4"));
         }
 
         private void MirrorSelectedAbsoluteRotation(

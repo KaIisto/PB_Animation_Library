@@ -181,6 +181,217 @@ namespace PB_AnimationLibrary
             return true;
         }
 
+        internal static bool MirrorPositionEdit(
+            CombatEntity actor,
+            PoseSnapshot sourcePose,
+            PoseNodeSnapshot sourceNode,
+            PoseNodeSnapshot targetNode,
+            out float sourceDeltaDistance,
+            out float targetDeltaDistance)
+        {
+            sourceDeltaDistance = 0f;
+            targetDeltaDistance = 0f;
+
+            if (actor == null ||
+                sourcePose == null ||
+                sourceNode == null ||
+                targetNode == null)
+            {
+                return false;
+            }
+
+            RootPose sourceBase;
+            RootPose sourceCurrent;
+            RootPose targetBase;
+
+            if (!TryGetRootPose(
+                    actor,
+                    sourcePose,
+                    sourceNode.Path,
+                    false,
+                    out sourceBase) ||
+                !TryGetRootPose(
+                    actor,
+                    sourcePose,
+                    sourceNode.Path,
+                    true,
+                    out sourceCurrent) ||
+                !TryGetRootPose(
+                    actor,
+                    sourcePose,
+                    targetNode.Path,
+                    false,
+                    out targetBase))
+            {
+                return false;
+            }
+
+            Vector3 sourceDelta =
+                sourceCurrent.Position -
+                sourceBase.Position;
+
+            Vector3 mirroredDelta =
+                MirrorRootSpacePositionDelta(
+                    sourceDelta);
+
+            Vector3 desiredTargetRootPosition =
+                targetBase.Position +
+                mirroredDelta;
+
+            RootPose targetParent =
+                RootPose.Identity;
+
+            if (!string.IsNullOrEmpty(targetNode.ParentPath) &&
+                !TryGetRootPose(
+                    actor,
+                    sourcePose,
+                    targetNode.ParentPath,
+                    true,
+                    out targetParent))
+            {
+                return false;
+            }
+
+            Vector3 targetLocalPosition =
+                Quaternion.Inverse(
+                    targetParent.Rotation) *
+                (desiredTargetRootPosition -
+                 targetParent.Position);
+
+            PoseOverrideRuntime.SetPosition(
+                actor,
+                targetNode.Path,
+                targetNode.LocalPosition,
+                targetLocalPosition);
+
+            sourceDeltaDistance =
+                sourceDelta.magnitude;
+
+            RootPose targetCurrent;
+            if (TryGetRootPose(
+                    actor,
+                    sourcePose,
+                    targetNode.Path,
+                    true,
+                    out targetCurrent))
+            {
+                targetDeltaDistance =
+                    Vector3.Distance(
+                        targetBase.Position,
+                        targetCurrent.Position);
+            }
+
+            return true;
+        }
+
+        private struct RootPose
+        {
+            internal static readonly RootPose Identity =
+                new RootPose(
+                    Vector3.zero,
+                    Quaternion.identity);
+
+            internal readonly Vector3 Position;
+            internal readonly Quaternion Rotation;
+
+            internal RootPose(
+                Vector3 position,
+                Quaternion rotation)
+            {
+                Position = position;
+                Rotation = rotation;
+            }
+        }
+
+        private static bool TryGetRootPose(
+            CombatEntity actor,
+            PoseSnapshot sourcePose,
+            string path,
+            bool includeOverrides,
+            out RootPose rootPose)
+        {
+            rootPose =
+                RootPose.Identity;
+
+            PoseNodeSnapshot node;
+            if (!sourcePose.TryGetNode(
+                    path,
+                    out node))
+            {
+                return false;
+            }
+
+            Vector3 localPosition =
+                node.LocalPosition;
+
+            Quaternion localRotation =
+                node.LocalRotation;
+
+            if (includeOverrides)
+            {
+                Vector3 overridePosition;
+                if (PoseOverrideRuntime.TryGetPosition(
+                        actor,
+                        path,
+                        out overridePosition))
+                {
+                    localPosition =
+                        overridePosition;
+                }
+
+                Quaternion overrideRotation;
+                if (PoseOverrideRuntime.TryGetRotation(
+                        actor,
+                        path,
+                        out overrideRotation))
+                {
+                    localRotation =
+                        overrideRotation;
+                }
+            }
+
+            if (string.IsNullOrEmpty(
+                    node.ParentPath))
+            {
+                // joint_root 자체의 transform은 mirror 좌표계 원점으로 취급함
+                rootPose =
+                    RootPose.Identity;
+
+                return true;
+            }
+
+            RootPose parent;
+            if (!TryGetRootPose(
+                    actor,
+                    sourcePose,
+                    node.ParentPath,
+                    includeOverrides,
+                    out parent))
+            {
+                return false;
+            }
+
+            rootPose =
+                new RootPose(
+                    parent.Position +
+                    parent.Rotation * localPosition,
+                    Normalize(
+                        parent.Rotation *
+                        localRotation));
+
+            return true;
+        }
+
+        private static Vector3 MirrorRootSpacePositionDelta(
+            Vector3 delta)
+        {
+            // joint_root local X=0 평면에서 selected-node 위치 변화량을 반사함
+            return new Vector3(
+                -delta.x,
+                delta.y,
+                delta.z);
+        }
+
         private static bool TryGetRootRotation(
             CombatEntity actor,
             PoseSnapshot sourcePose,

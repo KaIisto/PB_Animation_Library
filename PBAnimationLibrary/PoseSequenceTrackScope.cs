@@ -66,7 +66,8 @@ namespace PB_AnimationLibrary
                            IsRightArmPath(path);
 
                 case PoseSequenceTrackScope.LowerBody:
-                    return IsLeftLegPath(path) ||
+                    return IsPelvisPath(path) ||
+                           IsLeftLegPath(path) ||
                            IsRightLegPath(path);
 
                 case PoseSequenceTrackScope.HeadOnly:
@@ -121,6 +122,18 @@ namespace PB_AnimationLibrary
             return ContainsSegment(
                 path,
                 "joint_right_arm_xyz");
+        }
+
+        private static bool IsPelvisPath(
+            string path)
+        {
+            string nodeName =
+                GetNodeName(path);
+
+            return string.Equals(
+                nodeName,
+                "joint_pelvis_xyz",
+                StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsLeftLegPath(

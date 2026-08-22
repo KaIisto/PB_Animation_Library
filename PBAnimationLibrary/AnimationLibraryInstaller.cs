@@ -42,7 +42,7 @@ namespace PB_AnimationLibrary
                 HarmonyMethod postfix =
                     new HarmonyMethod(postfixMethod)
                     {
-                        // vanilla animation 이후 Pose Lab preview와 validation overlay를 적용
+                        // validation pose는 vanilla LateUpdate 결과 뒤에서 적용
                         priority = Priority.Last
                     };
 

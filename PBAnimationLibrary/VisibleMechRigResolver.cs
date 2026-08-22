@@ -10,6 +10,10 @@ namespace PB_AnimationLibrary
         private const string SamplingRootName = "unit_mech_body";
         private const string JointRootName = "joint_root";
         private const string TorsoJointMemberName = "torsoJoint";
+        private const string LeftWeaponReferenceMemberName = "lWeaponJointPalmLocal";
+        private const string RightWeaponReferenceMemberName = "rWeaponJointPalmLocal";
+        private const string LeftWeaponRootMemberName = "lWeaponTransform";
+        private const string RightWeaponRootMemberName = "rWeaponTransform";
 
         internal static bool TryResolve(
             CombatEntity actor,
@@ -37,6 +41,40 @@ namespace PB_AnimationLibrary
 
             jointRoot = FindDirectChildExact(samplingRoot, JointRootName);
             return jointRoot != null;
+        }
+
+        internal static bool TryResolveWeaponTransforms(
+            CombatEntity actor,
+            bool leftSide,
+            out Transform reference,
+            out Transform weaponRoot)
+        {
+            reference = null;
+            weaponRoot = null;
+
+            if (actor == null ||
+                !actor.hasMechAnimationView ||
+                actor.mechAnimationView.view == null)
+            {
+                return false;
+            }
+
+            object view = actor.mechAnimationView.view;
+
+            reference = ReadTransform(
+                view,
+                leftSide
+                    ? LeftWeaponReferenceMemberName
+                    : RightWeaponReferenceMemberName);
+
+            weaponRoot = ReadTransform(
+                view,
+                leftSide
+                    ? LeftWeaponRootMemberName
+                    : RightWeaponRootMemberName);
+
+            return reference != null &&
+                   weaponRoot != null;
         }
 
         private static Transform ReadTransform(object instance, string memberName)

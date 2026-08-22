@@ -70,6 +70,7 @@
     <Compile Include="PlanningPreviewRendererRefresh.cs" />
     <Compile Include="PoseAuthoringBoneSet.cs" />
     <Compile Include="PoseLabWorkspaceWindow.cs" />
+    <Compile Include="PoseLabMuzzleGuide.cs" />
     <Compile Include="PoseOverrideRuntime.cs" />
     <Compile Include="PoseCounterpartResolver.cs" />
     <Compile Include="PoseBranchMirror.cs" />

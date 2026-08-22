@@ -32,7 +32,7 @@ Pose Lab limits editable joints based on vanilla `UnitVisualManager.primaryBones
 - `*_auto` and non-primary helpers: not directly editable
 - `joint_pelvis_xyz`: additionally supports adjusting the Pelvis **local Y height**
 
-It also supports Weapon Follow, left/right symmetry and branch mirroring, a unit forward guide, and sparse Track Scopes.
+It also supports Weapon Follow, native hand weapon snap preview, weapon muzzle guides, left/right symmetry and branch mirroring, a unit forward guide, and sparse Track Scopes.
 
 This project's responsibility ends at **creating `.anim` files that can be used correctly in Phantom Brigade**.  
 How a finished `.anim` is used—such as which action plays it, when it starts or stops, or how aiming, blending, and cancellation are handled—is the responsibility of WFEF or other consumer/content mods. Pose Lab does not control those behaviors.
@@ -93,8 +93,11 @@ To use the automatic Visual Preview in the SDK, the following assets must exist 
    - `Restore original pose`: restores the original pose captured when the Actor was first opened
 5. In the **Pose Editor**, select joints from `Authoring Bones` and rotate them.
    - Left/right symmetric editing and mirroring are available
-   - Use `Left/Right weapon follows hand` if needed
+   - Use `Left/Right weapon follows current offset` to preserve the weapon's current hand-relative offset while posing
+   - If the Source Pose does not hold the weapon, use `Snap left/right weapon to native hand reference` to preview it at the native hand attachment reference
+   - Use `Show equipped weapon muzzle guides` to display the +Z firing direction from each equipped hand weapon's `ItemActivationLink.visualTransform`
    - Use `Show unit forward guide` if needed
+   - Weapon snap/follow and muzzle guides are authoring-preview only; weapon roots and muzzle transforms are not exported as PoseSequence/.anim tracks
    - Finger joints are only shown when `Show finger joints (advanced)` is enabled
    - Selecting `joint_pelvis_xyz` allows height adjustment with `Pelvis Height — local Y only`
 6. Click `Show Pose Sequence window` to open the Pose Sequence window.

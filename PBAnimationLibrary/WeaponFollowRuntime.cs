@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -6,30 +5,46 @@ namespace PB_AnimationLibrary
 {
     internal static class WeaponFollowRuntime
     {
-        private const string LeftReferenceName = "joint_left_weapon_local_xyz";
-        private const string RightReferenceName = "joint_right_weapon_local_xyz";
-        private const string LeftWeaponRootName = "joint_left_weapon";
-        private const string RightWeaponRootName = "joint_right_weapon";
+        private enum SideMode
+        {
+            None,
+            PreserveOffset,
+            NativeAnchor
+        }
 
         private sealed class SideBinding
         {
             internal Transform Reference;
+            internal Transform TargetSpace;
             internal Transform WeaponRoot;
 
             internal Vector3 RelativePosition;
             internal Quaternion RelativeRotation;
-
             internal Vector3 RestoreLocalPosition;
             internal Quaternion RestoreLocalRotation;
-
             internal bool Valid
             {
                 get
                 {
                     return Reference != null &&
+                           TargetSpace != null &&
                            WeaponRoot != null;
                 }
             }
+        }
+
+        private struct NativeAnchorPose
+        {
+            internal bool Valid;
+            internal Vector3 LocalPosition;
+            internal Quaternion LocalRotation;
+        }
+
+        private sealed class ActorNativeAnchorBaseline
+        {
+            internal CombatEntity Actor;
+            internal NativeAnchorPose Left;
+            internal NativeAnchorPose Right;
         }
 
         private sealed class ActorWeaponFollowState
@@ -37,40 +52,81 @@ namespace PB_AnimationLibrary
             internal CombatEntity Actor;
             internal SideBinding Left;
             internal SideBinding Right;
-            internal bool LeftEnabled;
-            internal bool RightEnabled;
-            internal int LastMechLateUpdateFrame = -1;
+            internal SideMode LeftMode;
+            internal SideMode RightMode;
         }
 
         private static readonly Dictionary<int, ActorWeaponFollowState> states =
             new Dictionary<int, ActorWeaponFollowState>();
 
+        private static readonly Dictionary<int, ActorNativeAnchorBaseline> nativeAnchorBaselines =
+            new Dictionary<int, ActorNativeAnchorBaseline>();
+
+        internal static void CaptureNativeAnchorBaseline(CombatEntity actor)
+        {
+            int actorId;
+            if (!TryGetActorId(actor, out actorId))
+                return;
+
+            ActorNativeAnchorBaseline existing;
+            if (nativeAnchorBaselines.TryGetValue(actorId, out existing) &&
+                existing.Actor == actor)
+            {
+                return;
+            }
+
+            nativeAnchorBaselines[actorId] =
+                new ActorNativeAnchorBaseline
+                {
+                    Actor = actor,
+                    Left = CaptureNativeAnchorPose(actor, true),
+                    Right = CaptureNativeAnchorPose(actor, false)
+                };
+        }
+
         internal static bool IsEnabledFor(CombatEntity actor)
         {
             ActorWeaponFollowState state;
             return TryGetState(actor, out state) &&
-                   (state.LeftEnabled || state.RightEnabled);
+                   (state.LeftMode != SideMode.None ||
+                    state.RightMode != SideMode.None);
         }
 
         internal static bool IsLeftEnabledFor(CombatEntity actor)
         {
             ActorWeaponFollowState state;
             return TryGetState(actor, out state) &&
-                   state.LeftEnabled;
+                   state.LeftMode == SideMode.PreserveOffset;
         }
 
         internal static bool IsRightEnabledFor(CombatEntity actor)
         {
             ActorWeaponFollowState state;
             return TryGetState(actor, out state) &&
-                   state.RightEnabled;
+                   state.RightMode == SideMode.PreserveOffset;
+        }
+
+        internal static bool IsLeftNativeAnchorEnabledFor(
+            CombatEntity actor)
+        {
+            ActorWeaponFollowState state;
+            return TryGetState(actor, out state) &&
+                   state.LeftMode == SideMode.NativeAnchor;
+        }
+
+        internal static bool IsRightNativeAnchorEnabledFor(
+            CombatEntity actor)
+        {
+            ActorWeaponFollowState state;
+            return TryGetState(actor, out state) &&
+                   state.RightMode == SideMode.NativeAnchor;
         }
 
         internal static bool IsLeftReadyFor(CombatEntity actor)
         {
             ActorWeaponFollowState state;
             return TryGetState(actor, out state) &&
-                   state.LeftEnabled &&
+                   state.LeftMode != SideMode.None &&
                    state.Left != null &&
                    state.Left.Valid;
         }
@@ -79,37 +135,57 @@ namespace PB_AnimationLibrary
         {
             ActorWeaponFollowState state;
             return TryGetState(actor, out state) &&
-                   state.RightEnabled &&
+                   state.RightMode != SideMode.None &&
                    state.Right != null &&
                    state.Right.Valid;
-        }
-
-        internal static bool NeedsRenderFallback(CombatEntity actor)
-        {
-            ActorWeaponFollowState state;
-            return TryGetState(actor, out state) &&
-                   (state.LeftEnabled || state.RightEnabled) &&
-                   state.LastMechLateUpdateFrame != Time.frameCount;
         }
 
         internal static bool SetLeftEnabled(
             CombatEntity actor,
             bool value)
         {
-            return SetSideEnabled(
+            return SetSideMode(
                 actor,
                 true,
-                value);
+                value
+                    ? SideMode.PreserveOffset
+                    : SideMode.None);
         }
 
         internal static bool SetRightEnabled(
             CombatEntity actor,
             bool value)
         {
-            return SetSideEnabled(
+            return SetSideMode(
                 actor,
                 false,
-                value);
+                value
+                    ? SideMode.PreserveOffset
+                    : SideMode.None);
+        }
+
+        internal static bool SetLeftNativeAnchorEnabled(
+            CombatEntity actor,
+            bool value)
+        {
+            return SetSideMode(
+                actor,
+                true,
+                value
+                    ? SideMode.NativeAnchor
+                    : SideMode.None);
+        }
+
+        internal static bool SetRightNativeAnchorEnabled(
+            CombatEntity actor,
+            bool value)
+        {
+            return SetSideMode(
+                actor,
+                false,
+                value
+                    ? SideMode.NativeAnchor
+                    : SideMode.None);
         }
 
         internal static bool Rebind(CombatEntity actor)
@@ -118,75 +194,77 @@ namespace PB_AnimationLibrary
             if (!TryGetState(actor, out state))
                 return false;
 
-            Transform samplingRoot;
-            Transform jointRoot;
-            if (!VisibleMechRigResolver.TryResolve(
-                    actor,
-                    out samplingRoot,
-                    out jointRoot))
+            if (state.LeftMode != SideMode.None)
             {
-                Disable(actor, false);
-                return false;
-            }
-
-            if (state.LeftEnabled)
-            {
+                SideBinding previous = state.Left;
                 state.Left =
                     CaptureSide(
-                        samplingRoot,
-                        jointRoot,
-                        LeftReferenceName,
-                        LeftWeaponRootName);
+                        actor,
+                        true,
+                        state.LeftMode);
+
+                if (state.LeftMode == SideMode.NativeAnchor)
+                {
+                    PreserveRestorePose(
+                        previous,
+                        state.Left);
+
+                    ApplySide(state.Left);
+                }
 
                 if (!state.Left.Valid)
                 {
                     state.Left = null;
-                    state.LeftEnabled = false;
+                    state.LeftMode = SideMode.None;
                 }
             }
 
-            if (state.RightEnabled)
+            if (state.RightMode != SideMode.None)
             {
+                SideBinding previous = state.Right;
                 state.Right =
                     CaptureSide(
-                        samplingRoot,
-                        jointRoot,
-                        RightReferenceName,
-                        RightWeaponRootName);
+                        actor,
+                        false,
+                        state.RightMode);
+
+                if (state.RightMode == SideMode.NativeAnchor)
+                {
+                    PreserveRestorePose(
+                        previous,
+                        state.Right);
+
+                    ApplySide(state.Right);
+                }
 
                 if (!state.Right.Valid)
                 {
                     state.Right = null;
-                    state.RightEnabled = false;
+                    state.RightMode = SideMode.None;
                 }
             }
 
-            state.LastMechLateUpdateFrame = -1;
-
-            if (!state.LeftEnabled && !state.RightEnabled)
+            if (state.LeftMode == SideMode.None &&
+                state.RightMode == SideMode.None)
+            {
                 RemoveState(actor);
+            }
 
-            return state.LeftEnabled || state.RightEnabled;
+            return state.LeftMode != SideMode.None ||
+                   state.RightMode != SideMode.None;
         }
 
         internal static void ApplyFromMechLateUpdate(CombatEntity actor)
         {
-            ActorWeaponFollowState state;
-            if (!TryGetState(actor, out state) ||
-                (!state.LeftEnabled && !state.RightEnabled))
-            {
-                return;
-            }
-
-            state.LastMechLateUpdateFrame = Time.frameCount;
-            Apply(state);
+            Apply(actor);
         }
 
         internal static void Apply(CombatEntity actor)
         {
             ActorWeaponFollowState state;
             if (!TryGetState(actor, out state) ||
-                (!state.LeftEnabled && !state.RightEnabled))
+                (state.LeftMode == SideMode.None &&
+                 state.RightMode == SideMode.None))
             {
                 return;
             }
@@ -214,7 +292,7 @@ namespace PB_AnimationLibrary
             if (logResult)
             {
                 AnimationLibraryLog.Info(
-                    "PoseLab|WEAPON_FOLLOW_ALL_DISABLED"
+                    "PoseLab|WEAPON_PREVIEW_ALL_DISABLED"
                     + "|actor=" + actorId);
             }
         }
@@ -222,14 +300,15 @@ namespace PB_AnimationLibrary
         internal static void DisableAllWithoutRestore()
         {
             states.Clear();
+            nativeAnchorBaselines.Clear();
         }
 
-        private static bool SetSideEnabled(
+        private static bool SetSideMode(
             CombatEntity actor,
             bool leftSide,
-            bool value)
+            SideMode mode)
         {
-            if (!value)
+            if (mode == SideMode.None)
             {
                 DisableSide(
                     actor,
@@ -256,25 +335,46 @@ namespace PB_AnimationLibrary
                 return false;
             }
 
+            SideBinding previous =
+                leftSide
+                    ? state.Left
+                    : state.Right;
+
+            SideMode previousMode =
+                leftSide
+                    ? state.LeftMode
+                    : state.RightMode;
+
+            if (previousMode != SideMode.None)
+                RestoreSide(previous);
+
             SideBinding binding =
                 CaptureSide(
-                    samplingRoot,
-                    jointRoot,
-                    leftSide
-                        ? LeftReferenceName
-                        : RightReferenceName,
-                    leftSide
-                        ? LeftWeaponRootName
-                        : RightWeaponRootName);
+                    actor,
+                    leftSide,
+                    mode);
 
             if (!binding.Valid)
             {
                 AnimationLibraryLog.Warn(
-                    "PoseLab weapon follow unavailable"
+                    "PoseLab weapon preview unavailable"
                     + "|actor="
                     + (actor.hasId ? actor.id.id : -1)
                     + "|side="
-                    + (leftSide ? "left" : "right"));
+                    + (leftSide ? "left" : "right")
+                    + "|mode="
+                    + GetModeLogValue(mode));
+
+                if (leftSide)
+                {
+                    state.Left = null;
+                    state.LeftMode = SideMode.None;
+                }
+                else
+                {
+                    state.Right = null;
+                    state.RightMode = SideMode.None;
+                }
 
                 RemoveStateIfEmpty(actor, state);
                 return false;
@@ -282,33 +382,25 @@ namespace PB_AnimationLibrary
 
             if (leftSide)
             {
-                if (state.LeftEnabled)
-                    RestoreSide(state.Left);
-
                 state.Left = binding;
-                state.LeftEnabled = true;
+                state.LeftMode = mode;
             }
             else
             {
-                if (state.RightEnabled)
-                    RestoreSide(state.Right);
-
                 state.Right = binding;
-                state.RightEnabled = true;
+                state.RightMode = mode;
             }
 
-            state.LastMechLateUpdateFrame = -1;
+            ApplySide(binding);
 
             AnimationLibraryLog.Info(
-                "PoseLab|WEAPON_FOLLOW_SIDE_ENABLED"
+                "PoseLab|WEAPON_PREVIEW_SIDE_ENABLED"
                 + "|actor="
                 + (actor.hasId ? actor.id.id : -1)
                 + "|side="
                 + (leftSide ? "left" : "right")
-                + "|reference="
-                + (leftSide
-                    ? LeftReferenceName
-                    : RightReferenceName));
+                + "|mode="
+                + GetModeLogValue(mode));
 
             return true;
         }
@@ -322,12 +414,12 @@ namespace PB_AnimationLibrary
             if (!TryGetState(actor, out state))
                 return;
 
-            bool wasEnabled =
+            SideMode mode =
                 leftSide
-                    ? state.LeftEnabled
-                    : state.RightEnabled;
+                    ? state.LeftMode
+                    : state.RightMode;
 
-            if (!wasEnabled)
+            if (mode == SideMode.None)
                 return;
 
             int actorId =
@@ -339,34 +431,35 @@ namespace PB_AnimationLibrary
             {
                 RestoreSide(state.Left);
                 state.Left = null;
-                state.LeftEnabled = false;
+                state.LeftMode = SideMode.None;
             }
             else
             {
                 RestoreSide(state.Right);
                 state.Right = null;
-                state.RightEnabled = false;
+                state.RightMode = SideMode.None;
             }
 
-            state.LastMechLateUpdateFrame = -1;
             RemoveStateIfEmpty(actor, state);
 
             if (logResult)
             {
                 AnimationLibraryLog.Info(
-                    "PoseLab|WEAPON_FOLLOW_SIDE_DISABLED"
+                    "PoseLab|WEAPON_PREVIEW_SIDE_DISABLED"
                     + "|actor=" + actorId
                     + "|side="
-                    + (leftSide ? "left" : "right"));
+                    + (leftSide ? "left" : "right")
+                    + "|mode="
+                    + GetModeLogValue(mode));
             }
         }
 
         private static void Apply(ActorWeaponFollowState state)
         {
-            if (state.LeftEnabled)
+            if (state.LeftMode != SideMode.None)
                 ApplySide(state.Left);
 
-            if (state.RightEnabled)
+            if (state.RightMode != SideMode.None)
                 ApplySide(state.Right);
         }
 
@@ -414,8 +507,11 @@ namespace PB_AnimationLibrary
             CombatEntity actor,
             ActorWeaponFollowState state)
         {
-            if (state.LeftEnabled || state.RightEnabled)
+            if (state.LeftMode != SideMode.None ||
+                state.RightMode != SideMode.None)
+            {
                 return;
+            }
 
             RemoveState(actor);
         }
@@ -441,20 +537,18 @@ namespace PB_AnimationLibrary
         }
 
         private static SideBinding CaptureSide(
-            Transform samplingRoot,
-            Transform jointRoot,
-            string referenceName,
-            string weaponRootName)
+            CombatEntity actor,
+            bool leftSide,
+            SideMode mode)
         {
-            Transform reference =
-                FindDescendantExact(
-                    samplingRoot,
-                    referenceName);
+            Transform reference;
+            Transform weaponRoot;
 
-            Transform weaponRoot =
-                FindDirectChildExact(
-                    jointRoot,
-                    weaponRootName);
+            VisibleMechRigResolver.TryResolveWeaponTransforms(
+                actor,
+                leftSide,
+                out reference,
+                out weaponRoot);
 
             SideBinding binding =
                 new SideBinding
@@ -463,16 +557,45 @@ namespace PB_AnimationLibrary
                     WeaponRoot = weaponRoot
                 };
 
-            if (!binding.Valid)
+            if (reference == null || weaponRoot == null)
                 return binding;
 
-            binding.RelativePosition =
-                reference.InverseTransformPoint(
-                    weaponRoot.position);
+            if (mode == SideMode.NativeAnchor)
+            {
+                Transform palm = reference.parent;
+                if (palm == null)
+                    return binding;
 
-            binding.RelativeRotation =
-                Quaternion.Inverse(reference.rotation) *
-                weaponRoot.rotation;
+                NativeAnchorPose anchorPose;
+                if (!TryGetNativeAnchorPose(
+                        actor,
+                        leftSide,
+                        out anchorPose))
+                {
+                    anchorPose =
+                        new NativeAnchorPose
+                        {
+                            Valid = true,
+                            LocalPosition = reference.localPosition,
+                            LocalRotation = reference.localRotation
+                        };
+                }
+
+                binding.TargetSpace = palm;
+                binding.RelativePosition = anchorPose.LocalPosition;
+                binding.RelativeRotation = anchorPose.LocalRotation;
+            }
+            else
+            {
+                binding.TargetSpace = reference;
+                binding.RelativePosition =
+                    reference.InverseTransformPoint(
+                        weaponRoot.position);
+
+                binding.RelativeRotation =
+                    Quaternion.Inverse(reference.rotation) *
+                    weaponRoot.rotation;
+            }
 
             binding.RestoreLocalPosition =
                 weaponRoot.localPosition;
@@ -483,17 +606,102 @@ namespace PB_AnimationLibrary
             return binding;
         }
 
+        private static NativeAnchorPose CaptureNativeAnchorPose(
+            CombatEntity actor,
+            bool leftSide)
+        {
+            Transform reference;
+            Transform weaponRoot;
+            if (!VisibleMechRigResolver.TryResolveWeaponTransforms(
+                    actor,
+                    leftSide,
+                    out reference,
+                    out weaponRoot) ||
+                reference == null ||
+                reference.parent == null)
+            {
+                return default(NativeAnchorPose);
+            }
+
+            Transform palm = reference.parent;
+
+            if (leftSide)
+            {
+                // joint_left_weapon_local_xyz는 Source Pose에 포함되므로 고정 hardpoint의 authored grip offset을 기준으로 사용
+                Transform canonical =
+                    palm.Find("hardpoint_left_weapon_old");
+
+                if (canonical != null)
+                {
+                    return new NativeAnchorPose
+                    {
+                        Valid = true,
+                        LocalPosition = canonical.localPosition,
+                        LocalRotation = canonical.localRotation
+                    };
+                }
+            }
+
+            return new NativeAnchorPose
+            {
+                Valid = true,
+                LocalPosition = reference.localPosition,
+                LocalRotation = reference.localRotation
+            };
+        }
+
+        private static bool TryGetNativeAnchorPose(
+            CombatEntity actor,
+            bool leftSide,
+            out NativeAnchorPose pose)
+        {
+            pose = default(NativeAnchorPose);
+
+            int actorId;
+            if (!TryGetActorId(actor, out actorId))
+                return false;
+
+            ActorNativeAnchorBaseline baseline;
+            if (!nativeAnchorBaselines.TryGetValue(actorId, out baseline) ||
+                baseline.Actor != actor)
+            {
+                return false;
+            }
+
+            pose = leftSide ? baseline.Left : baseline.Right;
+            return pose.Valid;
+        }
+
+        private static void PreserveRestorePose(
+            SideBinding previous,
+            SideBinding current)
+        {
+            if (previous == null ||
+                current == null ||
+                previous.WeaponRoot == null ||
+                previous.WeaponRoot != current.WeaponRoot)
+            {
+                return;
+            }
+
+            current.RestoreLocalPosition =
+                previous.RestoreLocalPosition;
+
+            current.RestoreLocalRotation =
+                previous.RestoreLocalRotation;
+        }
+
         private static void ApplySide(SideBinding binding)
         {
             if (binding == null || !binding.Valid)
                 return;
 
             binding.WeaponRoot.position =
-                binding.Reference.TransformPoint(
+                binding.TargetSpace.TransformPoint(
                     binding.RelativePosition);
 
             binding.WeaponRoot.rotation =
-                binding.Reference.rotation *
+                binding.TargetSpace.rotation *
                 binding.RelativeRotation;
         }
 
@@ -512,56 +720,20 @@ namespace PB_AnimationLibrary
                 binding.RestoreLocalRotation;
         }
 
-        private static Transform FindDescendantExact(
-            Transform root,
-            string name)
+        private static string GetModeLogValue(SideMode mode)
         {
-            if (root == null)
-                return null;
-
-            if (string.Equals(
-                    root.name,
-                    name,
-                    StringComparison.Ordinal))
+            switch (mode)
             {
-                return root;
+                case SideMode.PreserveOffset:
+                    return "preserve-offset";
+
+                case SideMode.NativeAnchor:
+                    return "native-anchor";
+
+                default:
+                    return "none";
             }
-
-            for (int i = 0; i < root.childCount; ++i)
-            {
-                Transform found =
-                    FindDescendantExact(
-                        root.GetChild(i),
-                        name);
-
-                if (found != null)
-                    return found;
-            }
-
-            return null;
         }
 
-        private static Transform FindDirectChildExact(
-            Transform parent,
-            string name)
-        {
-            if (parent == null)
-                return null;
-
-            for (int i = 0; i < parent.childCount; ++i)
-            {
-                Transform child = parent.GetChild(i);
-
-                if (string.Equals(
-                        child.name,
-                        name,
-                        StringComparison.Ordinal))
-                {
-                    return child;
-                }
-            }
-
-            return null;
-        }
     }
 }

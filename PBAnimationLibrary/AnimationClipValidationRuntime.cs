@@ -16,8 +16,6 @@ namespace PB_AnimationLibrary
         {
             internal CombatEntity Actor;
             internal string AnimationId;
-            internal string BundleName;
-            internal string AssetPath;
             internal AnimationClip Clip;
             internal PoseSnapshot RestorePose;
             internal bool Loop;
@@ -92,8 +90,6 @@ namespace PB_AnimationLibrary
                 {
                     Actor = actor,
                     AnimationId = animationId,
-                    BundleName = entry.BundleName,
-                    AssetPath = entry.AssetPath,
                     Clip = clip,
                     RestorePose = restorePose,
                     Loop = loop,
@@ -149,7 +145,8 @@ namespace PB_AnimationLibrary
                 + loop
                 + "|headPolicy="
                 + GetHeadPolicyLabel(
-                    headPolicy));
+                    headPolicy)
+                + "|sampleStage=post-lateupdate");
 
             return true;
         }

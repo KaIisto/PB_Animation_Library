@@ -1,7 +1,7 @@
 # PB Animation Library 프로젝트 경계
 
 대상: Phantom Brigade 2.2.2  
-현재 개발 기준: `0.11.3-release-cleanup1`
+현재 개발 기준: `0.11.6-weapon-authoring-preview3`
 
 ## 1. 프로젝트 목적
 
@@ -20,8 +20,8 @@ Pose Lab은 실제 PB visible mech rig를 authoring source로 사용한다.
 - vanilla customization pose를 authoring source로 sample
 - authoring bone edit
 - symmetry / branch mirror
-- Weapon Follow preview
-- unit forward guide
+- Weapon Follow / native hand snap preview
+- unit forward / equipped weapon muzzle guide
 - PoseSequence keyframe / scrub
 - Track Scope
 - bake exchange JSON export
@@ -38,6 +38,9 @@ Pose Lab은 실제 PB visible mech rig를 authoring source로 사용한다.
 
 `joint_pelvis_xyz`는 무릎 꿇기 등 chassis 높이 조정이 필요한 pose를 위해
 local Y position만 직접 편집할 수 있다.
+
+Weapon Follow / native hand snap과 muzzle guide는 authoring preview 전용이다.
+`joint_left_weapon` / `joint_right_weapon` 또는 muzzle Transform을 PoseSequence track으로 export하지 않는다.
 
 ## 3. PoseSequence / Bake Exchange
 
@@ -97,6 +100,8 @@ WFEF 또는 개별 content mod가 소유해야 하는 항목:
 - interrupt / cancel
 - blend / cross-fade
 - procedural aiming ordering
+- recoil / support-hand 후처리
+- weapon grip / attachment / mount semantics
 - equipment/tag 조건
 - gameplay runtime registry/API
 

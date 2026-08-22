@@ -32,7 +32,7 @@ Pose Lab에서는 vanilla `UnitVisualManager.primaryBones`를 기준으로 편�
 - `*_auto` 및 non-primary helper: 직접 편집하지 않음
 - `joint_pelvis_xyz`: 추가로 Pelvis의 **local Y 높이**를 조정 가능
 
-또한 Weapon Follow, 좌우 symmetry/branch mirror, unit forward guide, sparse Track Scope를 각자 지원함
+또한 Weapon Follow, native hand weapon snap preview, weapon muzzle guide, 좌우 symmetry/branch mirror, unit forward guide, sparse Track Scope를 각자 지원함
 
 이 프로젝트의 책임은 **PB에서 정상적으로 사용할 수 있는 `.anim`를 만드는 것까지**다.  
 완성된 `.anim`을 어떤 action에서 언제 재생할지, aiming/blend/cancel 등을 어떻게 처리할지는 WFEF 또는 각 consumer/content mod의 역할이며 해당 모드는 그것에 관여하지 않음
@@ -93,8 +93,11 @@ SDK에서 자동 Visual Preview까지 사용하려면 SDK 프로젝트 안에 �
    - `Restore original pose`: 처음 캡처한 원래 자세로 복원
 5. **Pose Editor**의 `Authoring Bones`에서 관절을 선택해 회전시킴
    - 좌우 대칭 편집/미러 사용 가능
-   - 필요하면 `Left/Right weapon follows hand` 사용
+   - 현재 무기 위치를 유지한 채 손을 따라오게 하려면 `Left/Right weapon follows current offset` 사용
+   - Source Pose에서 무기가 손에 없으면 `Snap left/right weapon to native hand reference`로 native 손 기준 위치에 붙여서 preview 가능
+   - 총구 방향을 확인하려면 `Show equipped weapon muzzle guides` 사용. 현재 손 장비의 `ItemActivationLink.visualTransform`에서 +Z 방향으로 선이 표시됨
    - 필요하면 `Show unit forward guide` 사용
+   - weapon snap/follow와 muzzle guide는 authoring preview 전용이며 weapon root나 muzzle은 PoseSequence/.anim track으로 export되지 않음
    - finger는 `Show finger joints (advanced)`를 켰을 때만 표시
    - `joint_pelvis_xyz`를 선택하면 `Pelvis Height — local Y only`로 높이를 조정할 수 있음
 6. `Show Pose Sequence window`를 눌러 Pose Sequence 창을 엶

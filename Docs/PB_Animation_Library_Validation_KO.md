@@ -26,6 +26,9 @@ Pose Sequence 창의 `AnimationClip Validation` 영역에서:
 `Preserve current head aim`은 validation 편의를 위한 옵션이다.
 consumer mod의 실제 head aiming 정책을 정의하지 않는다.
 
+Validation은 gameplay recoil, support-hand, weapon grip/attachment를 재현하지 않는다.
+이 항목은 WFEF 또는 개별 consumer/runtime mod가 action과 실제 장비 상태를 기준으로 처리한다.
+
 ## 구현 경계
 
 `AnimationClipValidationCatalog`는 현재 로드된 AssetBundle의 `.anim`만 열거한다.

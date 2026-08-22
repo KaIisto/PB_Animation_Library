@@ -161,6 +161,9 @@ namespace PB_AnimationLibrary
         private const float ForwardGuideMaxLength = 12f;
         private const float ForwardGuideDefaultLength = 4f;
         private const float ForwardGuideLineWidth = 0.035f;
+        private const float MuzzleGuideMinLength = 1f;
+        private const float MuzzleGuideMaxLength = 20f;
+        private const float MuzzleGuideDefaultLength = 6f;
         private const float PelvisHeightMinOffset = -5f;
         private const float PelvisHeightMaxOffset = 5f;
 
@@ -234,6 +237,13 @@ namespace PB_AnimationLibrary
         private Transform forwardGuideRoot;
         private Material forwardGuideMaterial;
 
+        private bool muzzleGuideVisible;
+        private float muzzleGuideLength =
+            MuzzleGuideDefaultLength;
+
+        private readonly PoseLabMuzzleGuide muzzleGuide =
+            new PoseLabMuzzleGuide();
+
         private PoseSequence sequence =
             new PoseSequence();
 
@@ -285,6 +295,7 @@ namespace PB_AnimationLibrary
             EnsureAuthoringBoneSet();
             ApplyActorPreview(actor);
             UpdateForwardGuide();
+            UpdateMuzzleGuide();
 
             AnimationLibraryLog.Info(
                 "PoseLab|ACTOR_SELECTED"
@@ -306,6 +317,7 @@ namespace PB_AnimationLibrary
             Camera.onPreCull -= OnCameraPreCull;
             PlanningPreviewRendererRefresh.Restore();
             DestroyForwardGuide();
+            muzzleGuide.Clear();
         }
 
         private void OnCameraPreCull(Camera camera)
@@ -321,30 +333,31 @@ namespace PB_AnimationLibrary
                 if (candidate == null)
                     continue;
 
-                if (!PoseSourceRuntime.NeedsRenderFallback(candidate) &&
-                    !PoseOverrideRuntime.NeedsRenderFallback(candidate) &&
-                    !AnimationClipValidationRuntime.NeedsRenderFallback(candidate) &&
-                    !WeaponFollowRuntime.NeedsRenderFallback(candidate))
+                bool poseFallbackRequired =
+                    PoseSourceRuntime.NeedsRenderFallback(candidate) ||
+                    PoseOverrideRuntime.NeedsRenderFallback(candidate) ||
+                    AnimationClipValidationRuntime.NeedsRenderFallback(candidate);
+
+                if (poseFallbackRequired)
                 {
-                    continue;
+                    Transform samplingRoot;
+                    Transform jointRoot;
+                    if (VisibleMechRigResolver.TryResolve(
+                            candidate,
+                            out samplingRoot,
+                            out jointRoot))
+                    {
+                        PlanningPreviewRendererRefresh.Enable(samplingRoot);
+                        PoseSourceRuntime.Apply(candidate);
+                        PoseOverrideRuntime.Apply(candidate);
+                        AnimationClipValidationRuntime.ApplyFromRenderFallback(candidate);
+                    }
                 }
 
-                Transform samplingRoot;
-                Transform jointRoot;
-                if (!VisibleMechRigResolver.TryResolve(
-                        candidate,
-                        out samplingRoot,
-                        out jointRoot))
-                {
-                    continue;
-                }
-
-                PlanningPreviewRendererRefresh.Enable(samplingRoot);
-                PoseSourceRuntime.Apply(candidate);
-                PoseOverrideRuntime.Apply(candidate);
-                AnimationClipValidationRuntime.ApplyFromRenderFallback(candidate);
                 WeaponFollowRuntime.Apply(candidate);
             }
+
+            UpdateMuzzleGuide();
         }
 
         private void OnGUI()
@@ -1500,13 +1513,16 @@ namespace PB_AnimationLibrary
                         : "Root forward axis: +Z");
             }
 
+            GUILayout.Space(4f);
+            GUILayout.Label("Weapon Preview");
+
             bool leftEnabled =
                 WeaponFollowRuntime.IsLeftEnabledFor(actor);
 
             bool leftRequested =
                 GUILayout.Toggle(
                     leftEnabled,
-                    "Left weapon follows hand");
+                    "Left weapon follows current offset");
 
             if (leftRequested != leftEnabled)
             {
@@ -1515,13 +1531,28 @@ namespace PB_AnimationLibrary
                     leftRequested);
             }
 
+            bool leftNativeAnchor =
+                WeaponFollowRuntime.IsLeftNativeAnchorEnabledFor(actor);
+
+            bool leftNativeAnchorRequested =
+                GUILayout.Toggle(
+                    leftNativeAnchor,
+                    "Snap left weapon to native hand reference");
+
+            if (leftNativeAnchorRequested != leftNativeAnchor)
+            {
+                WeaponFollowRuntime.SetLeftNativeAnchorEnabled(
+                    actor,
+                    leftNativeAnchorRequested);
+            }
+
             bool rightEnabled =
                 WeaponFollowRuntime.IsRightEnabledFor(actor);
 
             bool rightRequested =
                 GUILayout.Toggle(
                     rightEnabled,
-                    "Right weapon follows hand");
+                    "Right weapon follows current offset");
 
             if (rightRequested != rightEnabled)
             {
@@ -1530,18 +1561,117 @@ namespace PB_AnimationLibrary
                     rightRequested);
             }
 
+            bool rightNativeAnchor =
+                WeaponFollowRuntime.IsRightNativeAnchorEnabledFor(actor);
+
+            bool rightNativeAnchorRequested =
+                GUILayout.Toggle(
+                    rightNativeAnchor,
+                    "Snap right weapon to native hand reference");
+
+            if (rightNativeAnchorRequested != rightNativeAnchor)
+            {
+                WeaponFollowRuntime.SetRightNativeAnchorEnabled(
+                    actor,
+                    rightNativeAnchorRequested);
+            }
+
             if (WeaponFollowRuntime.IsEnabledFor(actor))
             {
                 GUILayout.Label(
-                    "Weapon follow: left="
-                    + (WeaponFollowRuntime.IsLeftEnabledFor(actor)
-                        ? (WeaponFollowRuntime.IsLeftReadyFor(actor) ? "ready" : "missing")
-                        : "off")
+                    "Weapon preview: left="
+                    + GetWeaponPreviewStatus(true)
                     + " | right="
-                    + (WeaponFollowRuntime.IsRightEnabledFor(actor)
-                        ? (WeaponFollowRuntime.IsRightReadyFor(actor) ? "ready" : "missing")
-                        : "off"));
+                    + GetWeaponPreviewStatus(false));
             }
+
+            bool muzzleGuideRequested =
+                GUILayout.Toggle(
+                    muzzleGuideVisible,
+                    "Show equipped weapon muzzle guides");
+
+            if (muzzleGuideRequested != muzzleGuideVisible)
+            {
+                muzzleGuideVisible =
+                    muzzleGuideRequested;
+
+                UpdateMuzzleGuide();
+            }
+
+            if (muzzleGuideVisible)
+            {
+                GUILayout.Label(
+                    "Muzzle guide length: "
+                    + muzzleGuideLength.ToString("F1"));
+
+                float requestedMuzzleLength =
+                    GUILayout.HorizontalSlider(
+                        muzzleGuideLength,
+                        MuzzleGuideMinLength,
+                        MuzzleGuideMaxLength);
+
+                if (Mathf.Abs(
+                        requestedMuzzleLength -
+                        muzzleGuideLength) >
+                    0.001f)
+                {
+                    muzzleGuideLength =
+                        requestedMuzzleLength;
+
+                    UpdateMuzzleGuide();
+                }
+
+                GUILayout.Label(
+                    "Muzzle guides: "
+                    + muzzleGuide.Count
+                    + " | ItemActivationLink.visualTransform +Z");
+            }
+        }
+
+        private string GetWeaponPreviewStatus(bool leftSide)
+        {
+            bool nativeAnchor =
+                leftSide
+                    ? WeaponFollowRuntime.IsLeftNativeAnchorEnabledFor(actor)
+                    : WeaponFollowRuntime.IsRightNativeAnchorEnabledFor(actor);
+
+            bool preserveOffset =
+                leftSide
+                    ? WeaponFollowRuntime.IsLeftEnabledFor(actor)
+                    : WeaponFollowRuntime.IsRightEnabledFor(actor);
+
+            bool ready =
+                leftSide
+                    ? WeaponFollowRuntime.IsLeftReadyFor(actor)
+                    : WeaponFollowRuntime.IsRightReadyFor(actor);
+
+            if (nativeAnchor)
+                return ready ? "native-anchor" : "native-anchor missing";
+
+            if (preserveOffset)
+                return ready ? "offset-follow" : "offset-follow missing";
+
+            return "off";
+        }
+
+        private void UpdateMuzzleGuide()
+        {
+            if (!muzzleGuideVisible ||
+                actor == null)
+            {
+                muzzleGuide.Clear();
+                return;
+            }
+
+            float length =
+                Mathf.Clamp(
+                    muzzleGuideLength,
+                    MuzzleGuideMinLength,
+                    MuzzleGuideMaxLength);
+
+            muzzleGuide.Update(
+                actor,
+                length);
         }
 
         private void UpdateForwardGuide()
@@ -1822,6 +1952,7 @@ namespace PB_AnimationLibrary
             }
 
             originalPose = captured;
+            WeaponFollowRuntime.CaptureNativeAnchorBaseline(actor);
 
             AnimationLibraryLog.Info(
                 "PoseLab|ORIGINAL_POSE_CAPTURED"
